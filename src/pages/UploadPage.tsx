@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useResume } from "@/lib/resume-context";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import mammoth from "mammoth";
 
 const UploadPage = () => {
   const { setResumeText, targetRole, setTargetRole, setAnalysisData, setIsAnalyzing, setFileName } = useResume();
@@ -14,8 +15,15 @@ const UploadPage = () => {
   const { toast } = useToast();
 
   const extractText = async (file: File): Promise<string> => {
-    // For text-based extraction, we read as text. For real PDF parsing we'd need a library.
-    // We'll send the raw text content - for PDFs the edge function will handle it.
+    const name = file.name.toLowerCase();
+
+    if (name.endsWith(".docx")) {
+      const arrayBuffer = await file.arrayBuffer();
+      const result = await mammoth.extractRawText({ arrayBuffer });
+      return result.value;
+    }
+
+    // For .txt and other text files, read as text
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result as string);

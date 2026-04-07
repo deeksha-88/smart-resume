@@ -82,14 +82,32 @@ Ensure salary is in INR. Learning resources must be from Coursera, W3Schools, MD
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content || "";
     
-    // Parse JSON from response, handling potential markdown fences
+    // Parse JSON from response - extract JSON object from any surrounding text
     let parsed;
     try {
-      const cleaned = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-      parsed = JSON.parse(cleaned);
+      // Try direct parse first
+      parsed = JSON.parse(content.trim());
     } catch {
-      console.error("Failed to parse AI response:", content);
-      throw new Error("Failed to parse analysis results");
+      try {
+        // Remove markdown fences and try again
+        const cleaned = content.replace(/```(?:json)?\s*/g, "").replace(/```\s*/g, "").trim();
+        parsed = JSON.parse(cleaned);
+      } catch {
+        // Last resort: find the first { and last } to extract JSON
+        const start = content.indexOf("{");
+        const end = content.lastIndexOf("}");
+        if (start !== -1 && end !== -1 && end > start) {
+          try {
+            parsed = JSON.parse(content.slice(start, end + 1));
+          } catch {
+            console.error("Failed to parse AI response (all methods):", content.substring(0, 500));
+            throw new Error("Failed to parse analysis results");
+          }
+        } else {
+          console.error("No JSON found in AI response:", content.substring(0, 500));
+          throw new Error("Failed to parse analysis results");
+        }
+      }
     }
 
     return new Response(JSON.stringify(parsed), {
