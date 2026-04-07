@@ -1,3 +1,3 @@
-# Welcome to your Lovable project
+# Welcome to your ai-resume-analyzer project
 
 TODO: Document your project here
