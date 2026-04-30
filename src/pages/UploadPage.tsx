@@ -45,11 +45,20 @@ const UploadPage = () => {
       const text = await extractText(localFile);
       setResumeText(text);
 
+      const payload = { resumeText: text, targetRole: targetRole.trim(), action: "analyze" as const };
+      console.log("[analyze-resume] request", payload);
+
       const { data, error } = await supabase.functions.invoke("analyze-resume", {
-        body: { resumeText: text, targetRole: targetRole.trim(), action: "analyze" },
+        body: payload,
+        headers: { "Content-Type": "application/json" },
       });
 
-      if (error) throw error;
+      console.log("[analyze-resume] response", { data, error });
+
+      if (error) {
+        const message = typeof error.message === "string" ? error.message : "Failed to send request to the Edge Function";
+        throw new Error(message);
+      }
       if (data?.error) throw new Error(data.error);
 
       setAnalysisData(data);
