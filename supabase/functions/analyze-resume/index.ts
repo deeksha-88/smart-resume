@@ -10,8 +10,8 @@ serve(async (req) => {
 
   try {
     const { resumeText, targetRole, action, messages, interviewContext } = await req.json();
-    const ai-resume-analyzer_API_KEY = Deno.env.get("ai-resume-analyzer_API_KEY");
-    if (!ai-resume-analyzer_API_KEY) throw new Error("ai-resume-analyzer_API_KEY not configured");
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
     let systemPrompt = "";
     let userPrompt = "";
