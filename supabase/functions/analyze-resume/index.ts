@@ -10,14 +10,14 @@ serve(async (req) => {
 
   try {
     const { resumeText, targetRole, action, messages, interviewContext } = await req.json();
-    const ai-resume-analyzer_API_KEY = Deno.env.get("ai-resume-analyzer_API_KEY");
-    if (!ai-resume-analyzer_API_KEY) throw new Error("ai-resume-analyzer_API_KEY not configured");
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
     let systemPrompt = "";
     let userPrompt = "";
 
     if (action === "analyze") {
-      systemPrompt = `You are an expert resume analyzer and career advisor. Analyze the resume against the target role and return ONLY valid JSON (no markdown, no code fences) with this exact structure:
+      systemPrompt = `You are an expert resume analyzer and career advisor. Analyze the ACTUAL resume text against the ACTUAL target role and return ONLY valid JSON (no markdown, no code fences) with this exact structure:
 {
   "overallScore": number (0-100),
   "matchedSkills": ["skill1", "skill2", ...],
@@ -27,11 +27,24 @@ serve(async (req) => {
   "jobRecommendations": [{"title": "string", "company": "string", "matchPercent": number, "location": "string", "description": "string"}],
   "salaryInsights": {"minSalary": number, "maxSalary": number, "avgSalary": number, "currency": "INR", "roleBreakdown": [{"level": "string", "salary": "string"}]},
   "aiSummary": "string (2-3 paragraph profile evaluation)",
-  "learningRoadmap": [{"title": "string", "source": "Coursera|W3Schools|MDN|FreeCodeCamp|Khan Academy", "url": "string (valid URL)", "duration": "string", "skillCovered": "string"}],
+  "learningRoadmap": [{"title": "string", "source": "W3Schools|FreeCodeCamp|MDN", "url": "string (valid URL)", "duration": "string", "skillCovered": "string"}],
   "modifiedResume": "string (enhanced resume in markdown format)",
   "interviewQuestions": [{"question": "string", "sampleAnswer": "string", "difficulty": "Easy|Medium|Hard"}]
 }
-Ensure salary is in INR. Learning resources must be from Coursera, W3Schools, MDN, FreeCodeCamp, or Khan Academy only. Provide at least 5 job recommendations, 6 learning resources, 8 skill scores, 5 category scores, and 10 interview questions.`;
+
+STRICT DYNAMIC RULES — every value MUST be derived from the provided resume text and target role:
+1. matchedSkills = skills that BOTH appear in the resume AND are required for the target role.
+2. missingSkills = skills required for the target role that DO NOT appear in the resume. If overallScore < 100, missingSkills MUST contain at least 3 entries. Never return an empty missingSkills unless overallScore is exactly 100.
+3. overallScore = round(matchedSkills.length / (matchedSkills.length + missingSkills.length) * 100). Different resumes/roles MUST produce different scores.
+4. Provide at least 5 job recommendations relevant to the target role and the candidate's actual skill set, with realistic matchPercent values that vary per job.
+5. Salary in INR only (numeric rupees, e.g. 1200000 for ₹12 LPA). Salary range MUST scale with overallScore (higher score => higher range).
+6. learningRoadmap: ONLY use links from these three trusted domains — w3schools.com, freecodecamp.org, developer.mozilla.org. Each "url" must be a real, valid, clickable HTTPS link on one of these domains. ABSOLUTELY NO YouTube, Udemy, Coursera, Khan Academy, blog, or other domains. Provide at least 6 resources, each targeting a specific missingSkill.
+7. interviewQuestions: at least 10, tailored to the target role.
+8. skillScores: at least 8 entries covering both matched and missing skills.
+9. categoryScores: at least 5 categories (e.g. Technical, Communication, Problem Solving, Domain Knowledge, Tools).
+10. modifiedResume: take the original resume content and enhance it — keep original sections, merge missing skills into the Skills section, strengthen bullet points. Do NOT fabricate experience the candidate doesn't have.
+
+Return ONLY the JSON object, nothing else.`;
       userPrompt = `Resume:\n${resumeText}\n\nTarget Role: ${targetRole}`;
     } else if (action === "chat") {
       systemPrompt = `You are a career advisor chatbot. You help users with resume improvement, job search strategies, interview preparation, and career guidance. Be concise and actionable. If the user has shared resume context, use it to personalize advice.`;
@@ -44,10 +57,10 @@ Ensure salary is in INR. Learning resources must be from Coursera, W3Schools, MD
       ? [{ role: "system", content: systemPrompt }, ...(messages || [])]
       : [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }];
 
-    const response = await fetch("https://ai.gateway.ai-resume-analyzer.dev/v1/chat/completions", {
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${ai-resume-analyzer_API_KEY}`,
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -108,6 +121,30 @@ Ensure salary is in INR. Learning resources must be from Coursera, W3Schools, MD
           throw new Error("Failed to parse analysis results");
         }
       }
+    }
+
+    // Post-process: enforce trusted-only roadmap links
+    if (parsed && Array.isArray(parsed.learningRoadmap)) {
+      const trusted = ["w3schools.com", "freecodecamp.org", "developer.mozilla.org"];
+      const skillToFallback = (skill: string): { url: string; source: string } => {
+        const s = (skill || "").toLowerCase();
+        if (s.includes("html")) return { url: "https://www.w3schools.com/html/", source: "W3Schools" };
+        if (s.includes("css")) return { url: "https://www.w3schools.com/css/", source: "W3Schools" };
+        if (s.includes("react")) return { url: "https://www.freecodecamp.org/learn/front-end-development-libraries/", source: "FreeCodeCamp" };
+        if (s.includes("node")) return { url: "https://www.freecodecamp.org/learn/back-end-development-and-apis/", source: "FreeCodeCamp" };
+        if (s.includes("python")) return { url: "https://www.freecodecamp.org/learn/scientific-computing-with-python/", source: "FreeCodeCamp" };
+        if (s.includes("sql") || s.includes("database")) return { url: "https://www.w3schools.com/sql/", source: "W3Schools" };
+        if (s.includes("typescript") || s.includes("javascript") || s.includes("js")) return { url: "https://developer.mozilla.org/en-US/docs/Web/JavaScript", source: "MDN" };
+        if (s.includes("api") || s.includes("rest")) return { url: "https://developer.mozilla.org/en-US/docs/Web/HTTP", source: "MDN" };
+        return { url: "https://www.freecodecamp.org/learn/", source: "FreeCodeCamp" };
+      };
+      parsed.learningRoadmap = parsed.learningRoadmap.map((r: any) => {
+        const url: string = typeof r?.url === "string" ? r.url : "";
+        const ok = trusted.some((d) => url.includes(d));
+        if (ok) return r;
+        const fb = skillToFallback(r?.skillCovered || r?.title || "");
+        return { ...r, url: fb.url, source: fb.source };
+      });
     }
 
     return new Response(JSON.stringify(parsed), {
