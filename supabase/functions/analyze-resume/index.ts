@@ -40,9 +40,11 @@ type InterviewQuestion = {
   difficulty: string;
 };
 type AnalysisResult = {
+  score: number;
   overallScore: number;
   matchedSkills: string[];
   missingSkills: string[];
+  suggestions: string[];
   skillScores: SkillScore[];
   categoryScores: CategoryScore[];
   jobRecommendations: JobRecommendation[];
@@ -51,6 +53,7 @@ type AnalysisResult = {
   learningRoadmap: RoadmapItem[];
   modifiedResume: string;
   interviewQuestions: InterviewQuestion[];
+  mockInterviewQuestions: InterviewQuestion[];
   chatbotResponse: string;
 };
 
@@ -354,6 +357,15 @@ function makeSummary(jobRole: string, matchedSkills: string[], missingSkills: st
   return `This resume shows a credible foundation for a ${role} path, especially in ${strengths}. The profile already signals hands-on exposure and enough baseline knowledge to target entry-level or internship opportunities.\n\nTo improve competitiveness, focus next on ${gaps}. Closing these gaps will raise role readiness, strengthen interviews, and make the profile align more closely with current hiring expectations.`;
 }
 
+function makeSuggestions(jobRole: string, missingSkills: string[]): string[] {
+  const role = titleCase(jobRole || 'Software Engineer');
+  if (!missingSkills.length) {
+    return [`Your resume already aligns strongly with the ${role} role; keep building stronger project depth and measurable outcomes.`];
+  }
+
+  return missingSkills.slice(0, 5).map((skill) => `Add ${skill} to your project work and resume examples to strengthen your fit for ${role} roles.`);
+}
+
 function makeChatbotReply(messages: ChatMessage[] | undefined, jobRole: string, matchedSkills: string[], missingSkills: string[]): string {
   const lastUserMessage = [...(messages || [])].reverse().find((message) => message.role === 'user')?.content ?? '';
   const role = titleCase(jobRole || 'Software Engineer');
@@ -375,9 +387,11 @@ function analyzeResume(resumeText: string, jobRole: string, messages?: ChatMessa
 
   const learningRoadmap = makeRoadmap(missingSkills.slice(0, 6));
   const result: AnalysisResult = {
+    score: overallScore,
     overallScore,
     matchedSkills,
     missingSkills,
+    suggestions: makeSuggestions(jobRole, missingSkills),
     skillScores: makeSkillScores(roleSkills, resumeSkills, matchedSkills, missingSkills),
     categoryScores: makeCategoryScores(overallScore, matchedSkills.length, missingSkills.length, resumeSkills),
     jobRecommendations: makeJobRecommendations(jobRole, matchedSkills, resumeSkills),
@@ -386,6 +400,7 @@ function analyzeResume(resumeText: string, jobRole: string, messages?: ChatMessa
     learningRoadmap,
     modifiedResume: mergeIntoSkillsSection(resumeText, missingSkills, matchedSkills),
     interviewQuestions: makeInterviewQuestions(jobRole, matchedSkills, missingSkills),
+    mockInterviewQuestions: makeInterviewQuestions(jobRole, matchedSkills, missingSkills),
     chatbotResponse: makeChatbotReply(messages, jobRole, matchedSkills, missingSkills),
   };
 
